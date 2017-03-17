@@ -161,6 +161,7 @@ def makeBranchEval(first_branch):
     """
 
     def score(game, player):
+        # raise RuntimeError
         if not first_branch:
             first_branch.append(game.root)
         if game.root in first_branch:

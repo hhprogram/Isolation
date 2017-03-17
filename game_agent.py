@@ -170,11 +170,13 @@ class CustomPlayer:
             '''HLI CODE'''
             chosen_value = float('-inf')
             chosen_move = None
+            depth = 0
             if self.method == 'minimax':
                 if self.iterative:
-                    depth = 0
+                    print(legal_moves)
                     while True:
                         for move in legal_moves:
+                            print(move)
                             value, _ = self.minimax(game.forecast_move(move), depth)
                             if chosen_value < value:
                                 chosen_value = value
@@ -184,7 +186,6 @@ class CustomPlayer:
                     chosen_value, chosen_move = self.minimax(game, self.search_depth)
             elif self.method == 'alphabeta':
                 if self.iterative:
-                    depth = 0
                     while True:
                         for move in legal_moves:
                             value, _ = self.alphabeta(game.forecast_move(move), depth)
@@ -196,6 +197,7 @@ class CustomPlayer:
                     chosen_value, chosen_move = self.alphabeta(game, self.search_depth)
             else:
                 raise ValueError(self.method + " not a valid method")
+            return chosen_move
             '''HLI CODE'''
         except Timeout:
             # Handle any actions required at timeout, if necessary
@@ -245,7 +247,7 @@ class CustomPlayer:
             # (2) but since this VALUE is greater than BETA - min player will never choose it and 
             # therefore the rest of the nodes are irrelevant
             if beta:
-                if value > beta:
+                if value >= beta:
                     return value
                 # if it isn't greater than beta, then it's possible that VALUE is a better lower
                 # bound for MAX player and therefore update ALPHA when this happens. AND since VALUE
@@ -285,7 +287,7 @@ class CustomPlayer:
                 # MAX player (ALPHA) then this will never be an option as MAX has ALPHA as an option
                 # which is strictly better than value but MIN player will definitely choose VALUE
                 # over anything > ALPHA therefore can cut the for loop short
-                if value < alpha:
+                if value <= alpha:
                     return value
                 else:
                     beta = min(beta, value)
@@ -328,12 +330,12 @@ class CustomPlayer:
         '''HLI CODE'''
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-
-
+        chosen_move = game.get_player_location(self)
+        if depth == 0:
+            return (self.score(game, self), chosen_move)
         moves = [move for move in game.get_legal_moves(self)]
         if maximizing_player:
             value = float('-inf')
-            chosen_move = (-1,-1)
             for move in moves:
                 proposed_score = self.min_value(game.forecast_move(move), depth-1
                     , game.get_opponent(self))
@@ -344,7 +346,6 @@ class CustomPlayer:
                     break
         else:
             value = float('inf')
-            chosen_move = (-1,-1)
             for move in moves:
                 proposed_score = self.max_value(game.forecast_move(move), depth-1
                     , game.get_opponent(self))
@@ -398,29 +399,38 @@ class CustomPlayer:
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-        print(game.get_player_location(self))
         moves = [move for move in game.get_legal_moves(self)]
-        print(moves)
-        chosen_move = (-1,-1)
+        # if not moves:
+        #     moves = [(-1,-1)]
+        # if depth == 0:
+        #     move_scores = [(self.score(game.forecast_move(move), move) for move in moves)]
+
+        #     return (max(move_scores), chosen_move)
 
         if maximizing_player:
-            value = alpha
+            value = float('-inf')
             for move in moves:
-                proposed_score = self.min_value(game, depth-1, game.forecast_move(move), alpha, beta)
+                proposed_score = self.min_value(game.forecast_move(move), depth-1
+                    , game.get_opponent(self), alpha, beta)
                 if proposed_score > value:
                     value = proposed_score
                     chosen_move = move
                     alpha = value
+                    # if find a win - we can stop our search because beta always set to inf, 
+                    # and eval function will set value to inf if find a forced win therefore if 
+                    # eval function returns inf then we know we have a win
+                    if alpha >= beta:
+                        break
                 if self.time_left() < self.TIMER_THRESHOLD:
                     break
-        else:
-            value = beta
-            for move in moves:
-                proposed_score = self.max_value(game, depth-1, game.forecast_move(move), alpha, beta)
-                if proposed_score < value:  
-                    value = proposed_score
-                    chosen_move = move
-                    beta = value
-                if self.time_left() < self.TIMER_THRESHOLD + 8:
-                    break
+        # else:
+        #     value = float('inf')
+        #     for move in moves:
+        #         proposed_score = self.max_value(game.forecast_move(move), depth-1, game.get_opponent(self), alpha, beta)
+        #         if proposed_score < value:  
+        #             value = proposed_score
+        #             chosen_move = move
+        #             beta = value
+        #         if self.time_left() < self.TIMER_THRESHOLD + 8:
+        #             break
         return (value, chosen_move)
