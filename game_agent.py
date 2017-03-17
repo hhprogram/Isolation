@@ -176,11 +176,10 @@ class CustomPlayer:
             depth = 0
             if self.method == 'minimax':
                 if self.iterative:
-                    print(game.to_string())
+                    print(legal_moves)
                     while True:
                         for move in legal_moves:
                             value, _ = self.minimax(game.forecast_move(move), depth)
-                            print(_, depth)
                             if chosen_value < value:
                                 chosen_value = value
                                 chosen_move = move
@@ -338,12 +337,15 @@ class CustomPlayer:
             raise Timeout()
         chosen_move = game.get_player_location(self)
         if depth == 0:
+            print(chosen_move)
             return (self.score(game, self), chosen_move)
         moves = [move for move in game.get_legal_moves(self)]
         if maximizing_player:
             value = float('-inf')
+            print(game.get_player_location(self), " location")
+            print(moves)
             for move in moves:
-                print(move, "minimax")
+                print(move, "minimax", depth)
                 proposed_score = self.min_value(game.forecast_move(move), depth-1
                     , game.get_opponent(self))
                 if value <= proposed_score:
