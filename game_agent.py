@@ -24,13 +24,13 @@ def custom_heuristics(game, player, choice):
         """
         evaluation function that just returns number of legal moves
         """
-        return len(game.get_legal_moves(player))
+        return my_moves
     def move_difference():
         """
         evaluation function that returns the difference between my legal moves and the opponents
         legal moves
         """
-        return (len(game.get_legal_moves(player)) - len(game.get_opponent(player)))
+        return my_moves - opponent_moves
     def mix_strategy():
         """
         most complex evaluation function. evaluation function Calculates:
@@ -41,13 +41,16 @@ def custom_heuristics(game, player, choice):
             (3) The max number of legal moves after 1 forecasted move which cannot be blocked by 
                 opponent in his ply right after the forecasted move
         """
-        return
+        return 6
+    
+    opponent_moves = len(game.get_legal_moves(game.get_opponent(player)))
+    my_moves = len(game.get_legal_moves(player))
     if choice == 1:
-        max_moves()
+        return max_moves()
     elif choice == 2:
-        move_difference()
+        return move_difference()
     elif choice == 3:
-        mix_strategy()
+        return mix_strategy()
     else:
         raise ValueError(str(choice) + " not a valid option")
     '''HLI CODE'''
@@ -76,7 +79,7 @@ def custom_score(game, player):
         The heuristic value of the current game state to the specified player.
     """
     '''HLI CODE'''
-    return custom_heuristics(game, player, 2)
+    return float(custom_heuristics(game,player,choice=2))
     '''HLI CODE'''
 
 class CustomPlayer:
@@ -173,11 +176,11 @@ class CustomPlayer:
             depth = 0
             if self.method == 'minimax':
                 if self.iterative:
-                    print(legal_moves)
+                    print(game.to_string())
                     while True:
                         for move in legal_moves:
-                            print(move)
                             value, _ = self.minimax(game.forecast_move(move), depth)
+                            print(_, depth)
                             if chosen_value < value:
                                 chosen_value = value
                                 chosen_move = move
@@ -245,7 +248,10 @@ class CustomPlayer:
             # value but to basically cut the for loop short (prune) the remaining nodes. we do this
             # because if value > beta then we know (1) max player will at least want to pick VALUE
             # (2) but since this VALUE is greater than BETA - min player will never choose it and 
-            # therefore the rest of the nodes are irrelevant
+            # therefore the rest of the nodes are irrelevant. note, has to be >= not just strictly
+            # greater because since we choose the left most value even it it is equal to beta that
+            # doesn't matter as min player would pick the node that resulted in the original beta
+            # value therefore all other branches can be pruned
             if beta:
                 if value >= beta:
                     return value
@@ -337,19 +343,10 @@ class CustomPlayer:
         if maximizing_player:
             value = float('-inf')
             for move in moves:
+                print(move, "minimax")
                 proposed_score = self.min_value(game.forecast_move(move), depth-1
                     , game.get_opponent(self))
-                if value < proposed_score:
-                    value = proposed_score
-                    chosen_move = move
-                if self.time_left() < self.TIMER_THRESHOLD:
-                    break
-        else:
-            value = float('inf')
-            for move in moves:
-                proposed_score = self.max_value(game.forecast_move(move), depth-1
-                    , game.get_opponent(self))
-                if value > proposed_score:
+                if value <= proposed_score:
                     value = proposed_score
                     chosen_move = move
                 if self.time_left() < self.TIMER_THRESHOLD:
@@ -412,7 +409,7 @@ class CustomPlayer:
             for move in moves:
                 proposed_score = self.min_value(game.forecast_move(move), depth-1
                     , game.get_opponent(self), alpha, beta)
-                if proposed_score > value:
+                if proposed_score >= value:
                     value = proposed_score
                     chosen_move = move
                     alpha = value
@@ -423,14 +420,4 @@ class CustomPlayer:
                         break
                 if self.time_left() < self.TIMER_THRESHOLD:
                     break
-        # else:
-        #     value = float('inf')
-        #     for move in moves:
-        #         proposed_score = self.max_value(game.forecast_move(move), depth-1, game.get_opponent(self), alpha, beta)
-        #         if proposed_score < value:  
-        #             value = proposed_score
-        #             chosen_move = move
-        #             beta = value
-        #         if self.time_left() < self.TIMER_THRESHOLD + 8:
-        #             break
         return (value, chosen_move)
