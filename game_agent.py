@@ -14,6 +14,45 @@ class Timeout(Exception):
     pass
 
 
+def custom_heuristics(game, player, choice):
+    """
+    wrapper method that calls the particular evaluation function based on variable CHOICE. All 
+    functions returns -infitinity if legal moves for PLAYER == 0
+    """
+    '''HLI CODE'''
+    def max_moves():
+        """
+        evaluation function that just returns number of legal moves
+        """
+        return len(game.get_legal_moves(player))
+    def move_difference():
+        """
+        evaluation function that returns the difference between my legal moves and the opponents
+        legal moves
+        """
+        return (len(game.get_legal_moves(player)) - len(game.get_opponent(player)))
+    def mix_strategy():
+        """
+        most complex evaluation function. evaluation function Calculates:
+            (1) number of blank spaces on PLAYER's side of the board (ie the part of the board that 
+                PLAYER is 'closer' to than his opponent - cells equadistant considered part of 
+                'wall' and not incl. in sum) plus
+            (2) the difference between his legal moves and opponent's legal moves
+            (3) The max number of legal moves after 1 forecasted move which cannot be blocked by 
+                opponent in his ply right after the forecasted move
+        """
+        return
+    if choice == 1:
+        max_moves()
+    elif choice == 2:
+        move_difference()
+    elif choice == 3:
+        mix_strategy()
+    else:
+        raise ValueError(str(choice) + " not a valid option")
+    '''HLI CODE'''
+
+
 def custom_score(game, player):
     """Calculate the heuristic value of a game state from the point of view
     of the given player.
@@ -28,7 +67,7 @@ def custom_score(game, player):
         game (e.g., player locations and blocked cells).
 
     player : object
-        A player instance in the current game (i.e., an object corresponding to
+        A player instance in the cu rrent game (i.e., an object corresponding to
         one of the player objects `game.__player_1__` or `game.__player_2__`.)
 
     Returns
@@ -36,10 +75,9 @@ def custom_score(game, player):
     float
         The heuristic value of the current game state to the specified player.
     """
-
-    # TODO: finish this function!
-    raise NotImplementedError
-
+    '''HLI CODE'''
+    return custom_heuristics(game, player, 2)
+    '''HLI CODE'''
 
 class CustomPlayer:
     """Game-playing agent that chooses a move using your evaluation function
@@ -129,14 +167,132 @@ class CustomPlayer:
             # here in order to avoid timeout. The try/except block will
             # automatically catch the exception raised by the search method
             # when the timer gets close to expiring
-            pass
-
+            '''HLI CODE'''
+            chosen_value = float('-inf')
+            chosen_move = None
+            if self.method == 'minimax':
+                if self.iterative:
+                    depth = 0
+                    while True:
+                        for move in legal_moves:
+                            value, _ = self.minimax(game.forecast_move(move), depth)
+                            if chosen_value < value:
+                                chosen_value = value
+                                chosen_move = move
+                        depth += 1
+                else:
+                    chosen_value, chosen_move = self.minimax(game, self.search_depth)
+            elif self.method == 'alphabeta':
+                if self.iterative:
+                    depth = 0
+                    while True:
+                        for move in legal_moves:
+                            value, _ = self.alphabeta(game.forecast_move(move), depth)
+                            if chosen_value < value:
+                                chosen_move = value
+                                chosen_move = move
+                        depth += 1
+                else:
+                    chosen_value, chosen_move = self.alphabeta(game, self.search_depth)
+            else:
+                raise ValueError(self.method + " not a valid method")
+            '''HLI CODE'''
         except Timeout:
             # Handle any actions required at timeout, if necessary
-            pass
+            return chosen_move
 
-        # Return the best move from the last completed search iteration
-        raise NotImplementedError
+
+    '''HLI CODE'''
+    def max_value(self, game, depth, player, alpha=None, beta=None):
+        """
+        Args:
+            GAME: the game instance that is currently being evaluated
+            DEPTH: the number of levels to search
+            PLAYER: the player instance whose turn it is right now / point of view (ie if 
+                player is SELF, then SELF is trying to minimize value of current GAME)
+            ALPHA: the lower bound of the max player's obtainable value 
+            BETA: the upper bound of the min player's obtainable value
+                (both of these numbers are the scores that each of these player's can definitely
+                    obtain and thus anything unfavorable to these numbers in their point of view
+                    can be ignored)
+        Returns:
+            The value of the max value from this node -> ie the best value that MAX player can 
+            obtain at this node 
+        """
+        if depth == 0 or self.time_left() < self.TIMER_THRESHOLD:
+            # note: i need to do self.score(game, self) and NOT self.score(game,player) -> when
+            # i did this one it gave me wrong answer. This is because since max_value method
+            # is returning the max utitliy for SELF then i need to return the score at the 
+            # current game state in the point of view of SELF
+            return self.score(game, self)
+        value = float('-inf')
+        # this gets the next moves for the current PLAYER - which is not necessarily SELF
+        # we change this variable because legal moves of SELF vs SELF's opponent will be 
+        # different
+        moves = [move for move in game.get_legal_moves(player)]
+        # then we loop through the 'active' player's move and forecast the gameboard with each
+        # move and then since we denoted in the minimax method call that one of the player's
+        # was MAXIMIZING then we want to return the max value (in the point of view of SELF)
+        # from the minimum values that the other player will choose
+        for move in moves:
+            proposed_score = self.min_value(game.forecast_move(move), depth-1
+                , game.get_opponent(player), alpha, beta)
+            value = max(value, proposed_score)
+            # if BETA (ie beta has a value because we are doing alpha-beta pruning) then we check
+            # if value > beta. If it is we just return value. We do this not necessarily to return
+            # value but to basically cut the for loop short (prune) the remaining nodes. we do this
+            # because if value > beta then we know (1) max player will at least want to pick VALUE
+            # (2) but since this VALUE is greater than BETA - min player will never choose it and 
+            # therefore the rest of the nodes are irrelevant
+            if beta:
+                if value > beta:
+                    return value
+                # if it isn't greater than beta, then it's possible that VALUE is a better lower
+                # bound for MAX player and therefore update ALPHA when this happens. AND since VALUE
+                # isn't greater than BETA this is a possible result 
+                else:
+                    alpha = max(alpha, value)
+            if self.time_left() < self.TIMER_THRESHOLD:
+                return value
+        return value
+
+    def min_value(self, game, depth, player, alpha=None, beta=None):
+        """
+        Args:
+            GAME: the game instance that is currently being evaluated
+            DEPTH: the number of levels to search
+            PLAYER: the player instance whose turn it is right now / point of view (ie if 
+                player is SELF, then SELF is trying to minimize value of current GAME)
+            ALPHA: the lower bound of the max player's obtainable value 
+            BETA: the upper bound of the min player's obtainable value
+                (both of these numbers are the scores that each of these player's can definitely
+                    obtain and thus anything unfavorable to these numbers in their point of view
+                    can be ignored)
+        Returns:
+            The value of the min value from this node. ie the best that the MIN player can obtain
+            at this node
+        """
+        if depth == 0 or self.time_left() < self.TIMER_THRESHOLD:
+            return self.score(game, self)
+        value = float('inf')
+        moves = [move for move in game.get_legal_moves(player)]
+        for move in moves:
+            proposed_score = self.max_value(game.forecast_move(move), depth-1
+                , game.get_opponent(player), alpha, beta)
+            value = min(value, proposed_score)
+            if alpha:
+                # same logic as in MAX_VALUE but reversed. If value is less than the lower bound for
+                # MAX player (ALPHA) then this will never be an option as MAX has ALPHA as an option
+                # which is strictly better than value but MIN player will definitely choose VALUE
+                # over anything > ALPHA therefore can cut the for loop short
+                if value < alpha:
+                    return value
+                else:
+                    beta = min(beta, value)
+            if self.time_left() < self.TIMER_THRESHOLD:
+                return value
+        return value
+    '''HLI CODE'''
 
     def minimax(self, game, depth, maximizing_player=True):
         """Implement the minimax search algorithm as described in the lectures.
@@ -169,11 +325,38 @@ class CustomPlayer:
                 to pass the project unit tests; you cannot call any other
                 evaluation function directly.
         """
+        '''HLI CODE'''
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
 
-        # TODO: finish this function!
-        raise NotImplementedError
+
+        moves = [move for move in game.get_legal_moves(self)]
+        if maximizing_player:
+            value = float('-inf')
+            chosen_move = (-1,-1)
+            for move in moves:
+                proposed_score = self.min_value(game.forecast_move(move), depth-1
+                    , game.get_opponent(self))
+                if value < proposed_score:
+                    value = proposed_score
+                    chosen_move = move
+                if self.time_left() < self.TIMER_THRESHOLD:
+                    break
+        else:
+            value = float('inf')
+            chosen_move = (-1,-1)
+            for move in moves:
+                proposed_score = self.max_value(game.forecast_move(move), depth-1
+                    , game.get_opponent(self))
+                if value > proposed_score:
+                    value = proposed_score
+                    chosen_move = move
+                if self.time_left() < self.TIMER_THRESHOLD:
+                    break
+
+        return (value, chosen_move)
+        '''HLI CODE'''
+
 
     def alphabeta(self, game, depth, alpha=float("-inf"), beta=float("inf"), maximizing_player=True):
         """Implement minimax search with alpha-beta pruning as described in the
@@ -185,7 +368,7 @@ class CustomPlayer:
             An instance of the Isolation game `Board` class representing the
             current game state
 
-        depth : int
+        \depth : int//
             Depth is an integer representing the maximum number of plies to
             search in the game tree before aborting
 
@@ -215,6 +398,29 @@ class CustomPlayer:
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
+        print(game.get_player_location(self))
+        moves = [move for move in game.get_legal_moves(self)]
+        print(moves)
+        chosen_move = (-1,-1)
 
-        # TODO: finish this function!
-        raise NotImplementedError
+        if maximizing_player:
+            value = alpha
+            for move in moves:
+                proposed_score = self.min_value(game, depth-1, game.forecast_move(move), alpha, beta)
+                if proposed_score > value:
+                    value = proposed_score
+                    chosen_move = move
+                    alpha = value
+                if self.time_left() < self.TIMER_THRESHOLD:
+                    break
+        else:
+            value = beta
+            for move in moves:
+                proposed_score = self.max_value(game, depth-1, game.forecast_move(move), alpha, beta)
+                if proposed_score < value:  
+                    value = proposed_score
+                    chosen_move = move
+                    beta = value
+                if self.time_left() < self.TIMER_THRESHOLD + 8:
+                    break
+        return (value, chosen_move)
