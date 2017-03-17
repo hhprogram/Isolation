@@ -176,7 +176,7 @@ class CustomPlayer:
             depth = 0
             if self.method == 'minimax':
                 if self.iterative:
-                    print(legal_moves)
+                    # print(legal_moves)
                     while True:
                         for move in legal_moves:
                             value, _ = self.minimax(game.forecast_move(move), depth)
@@ -280,10 +280,13 @@ class CustomPlayer:
             at this node
         """
         if depth == 0 or self.time_left() < self.TIMER_THRESHOLD:
+            # print("location active", game.get_player_location(player), "location of me:", game.get_player_location(self))
             return self.score(game, self)
         value = float('inf')
         moves = [move for move in game.get_legal_moves(player)]
+        # print(moves, " moves")
         for move in moves:
+            # print(move, depth)
             proposed_score = self.max_value(game.forecast_move(move), depth-1
                 , game.get_opponent(player), alpha, beta)
             value = min(value, proposed_score)
@@ -331,23 +334,30 @@ class CustomPlayer:
             (1) You MUST use the `self.score()` method for board evaluation
                 to pass the project unit tests; you cannot call any other
                 evaluation function directly.
+            (2) I had to remember to get moves from game.active_player / feed in as argument 
+                for min_value method game.get_opponent.active_player as I assumed SELF always was
+                starting when this method got called - not true
         """
         '''HLI CODE'''
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
         chosen_move = game.get_player_location(self)
+        active = game.active_player
         if depth == 0:
-            print(chosen_move)
+            # print(chosen_move)
             return (self.score(game, self), chosen_move)
-        moves = [move for move in game.get_legal_moves(self)]
+        # print("starting location: ", game.get_player_location(self)
+        #     , game.get_player_location(game.get_opponent(self)))
+        moves = [move for move in game.get_legal_moves(active)]
+        # print(game.to_string())
         if maximizing_player:
             value = float('-inf')
-            print(game.get_player_location(self), " location")
-            print(moves)
+            # print(game.get_player_location(active), " location")
+            # print(moves)
             for move in moves:
-                print(move, "minimax", depth)
+                # print(move, "minimax", depth)
                 proposed_score = self.min_value(game.forecast_move(move), depth-1
-                    , game.get_opponent(self))
+                    , game.get_opponent(active))
                 if value <= proposed_score:
                     value = proposed_score
                     chosen_move = move
@@ -395,10 +405,14 @@ class CustomPlayer:
             (1) You MUST use the `self.score()` method for board evaluation
                 to pass the project unit tests; you cannot call any other
                 evaluation function directly.
+            (2) I had to remember to get moves from game.active_player / feed in as argument 
+                for min_value method game.get_opponent.active_player as I assumed SELF always was
+                starting when this method got called - not true
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-        moves = [move for move in game.get_legal_moves(self)]
+        active = game.active_player
+        moves = [move for move in game.get_legal_moves(active)]
         # if not moves:
         #     moves = [(-1,-1)]
         # if depth == 0:
@@ -410,7 +424,7 @@ class CustomPlayer:
             value = float('-inf')
             for move in moves:
                 proposed_score = self.min_value(game.forecast_move(move), depth-1
-                    , game.get_opponent(self), alpha, beta)
+                    , game.get_opponent(active), alpha, beta)
                 if proposed_score >= value:
                     value = proposed_score
                     chosen_move = move
