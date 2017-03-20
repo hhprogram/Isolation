@@ -7,50 +7,161 @@ You must test your agent's strength against a set of agents with known
 relative strength using tournament.py and include the results in your report.
 """
 import random
+from sample_players import improved_score
 
 
 class Timeout(Exception):
     """Subclass base exception for code clarity."""
     pass
 
+def calc_dist(game, player, spot):
+        """HLI CODE
+        helper method that calculates the sq distance between PLAYER and SPOT (note: don't bother 
+            with sq rooting as actual distance doesn't matter just need an ordering and sq root 
+            the sq will have same ordering)
+        Returns:
+            euclidean straight line distance between the 2 (absolute value - since it is the 
+                sq distance)
+        """
+        location = game.get_player_location(player)
+        # print(location, spot)
+        sq_dist = (location[0] - spot[0])**2 + (location[1] - spot[1])**2
+        return float(sq_dist)
+
+def closer_blank_spots(game, player):
+    """ HLI CODE
+    helper method that calculates the spots closer to PLAYER than PLAYER's 
+    opponent
+    Args:
+        GAME: the game instance
+        PLAYER: the player instance which we want to calculate the closer number of blank spaces
+            available
+    Returns:
+        list of closer blank spots to PLAYER
+    """
+    closer_spots = []
+    opponent = game.get_opponent(player)
+    blank_spots = game.get_blank_spaces()
+    for blank in blank_spots:
+        my_distance = calc_dist(game, player, blank)
+        opponent_distance = calc_dist(game, opponent, blank)
+        if my_distance < opponent_distance:
+            closer_spots.append(blank)
+    return closer_spots
+
+def is_partitioned(game):
+    """
+    helper method to determine if the players have been partitioned
+    """
+
+
 
 def custom_heuristics(game, player, choice):
-    """
+    """HLI CODE
     wrapper method that calls the particular evaluation function based on variable CHOICE. All 
-    functions returns -infitinity if legal moves for PLAYER == 0
+    functions returns -infiinity if legal moves for PLAYER == 0
     """
-    '''HLI CODE'''
-    def max_moves():
+    def strategy_1():
         """
-        evaluation function that just returns number of legal moves
+        evaluation function:
+            (1) Favors spots closer to opponent
+            (2) Favors spots farther away from the edges that opponent is not cloasest too. (ie if 
+                opponent is in top left quandrant - favor moves that put us farther away from the
+                bottom and right edge)
         """
-        return my_moves
-    def move_difference():
+        # get all spots along the edges
+        top_edge = [(row,column) for row, column in zip([0]*game.height, range(game.width))]
+        left_edge = [(column, row) for row, column in top_edge]
+        right_edge = [(row, column+game.width-1) for row, column in left_edge]
+        bottom_edge = [(row+game.height-1, column) for row, column in top_edge]
+        dist_players = calc_dist(game, player, game.get_player_location(opponent))
+        edges = [top_edge, right_edge, bottom_edge, left_edge]
+        opp_closest_edge_spots = []
+        min_dist = float('inf')
+        # loop through each edge and append the spot on each edge closest to opponent
+        for edge in edges:
+            closest_spot = (-1,-1)
+            for spot in edge:
+                dist = calc_dist(game, opponent, spot)
+                if dist < min_dist:
+                    min_dist = dist
+                    closest_spot = spot
+            opp_closest_edge_spots.append((min_dist, closest_spot))
+
+        opp_closest_edge_spots.sort()
+        # then create a list of edge spots that are the closest to OPPONENT and throw out any that 
+        # are farther away then the closest
+        closest_spots = [spot for dist, spot in opp_closest_edge_spots if dist==opp_closest_edge_spots[0][0]]
+        # then we want to (1) be as close as possible to opponent as possible but (2) not get closer
+        # to the CLOSEST_SPOTS than the opponent is
+        # print(game.get_player_location(player), game.get_player_location(opponent))
+        opp_dist_score = (1/dist_players)
+        edge_score = 0
+        for spot in closest_spots:
+            spot_dist = calc_dist(game, player, spot)
+            if spot_dist != 0:
+                edge_score += float(1/calc_dist(game, player, spot))
+        for dist, spot in opp_closest_edge_spots:
+            if spot not in closest_spot:
+                spot_dist = calc_dist(game, player, spot)
+                if spot_dist != 0:
+                    edge_score += calc_dist(game, player, spot)
+        return float(opp_dist_score + edge_score + moves_difference)
+
+
+    def strategy_2():
         """
-        evaluation function that returns the difference between my legal moves and the opponents
-        legal moves
+        if 2nd player - favors spots that are as close as possible to mirroring the opponent. If
+        not then just use strategy_3
         """
-        return my_moves - opponent_moves
-    def mix_strategy():
+        # checking if I went second - then try the mirroring heuristic or try to get to a square 
+        # that is as close to possible to mirroring
+        if game.move_count % 2 == 1:
+            mir_opp_pos = (game.get_player_location(opponent)[1]
+                , game.get_player_location(opponent)[0])
+            if game.get_player_location(player) == mir_opp_pos:
+                return float('inf')
+            else:
+                return float(1 / calc_dist(game, player, mir_opp_pos))
+        else:
+            return strategy_3()
+    def strategy_3():
         """
         most complex evaluation function. evaluation function Calculates:
             (1) number of blank spaces on PLAYER's side of the board (ie the part of the board that 
                 PLAYER is 'closer' to than his opponent - cells equadistant considered part of 
                 'wall' and not incl. in sum) plus
-            (2) the difference between his legal moves and opponent's legal moves
-            (3) The max number of legal moves after 1 forecasted move which cannot be blocked by 
-                opponent in his ply right after the forecasted move
+            (2) distance between the two players - try to minimize that
+            (3) if start of game, try to be as centered as possible
+            (4) difference between the legal moves I have from this game instance and the legal
+                moves my opponent has at this very instant
         """
-        return 6
-    
-    opponent_moves = len(game.get_legal_moves(game.get_opponent(player)))
-    my_moves = len(game.get_legal_moves(player))
+        # checking if i am first mover - if so try to get center spot or the most centered spot if
+        # height and width not odd
+        if game.get_blank_spaces() == game.height*game.width:
+            center_spot = (int(game.height/2), int(game.width/2))
+            if game.get_player_location(player) == center_spot:
+                return float('inf')
+            else:
+                return float(1/calc_dist(game, player, center_spot))
+        dist_players = calc_dist(game, player, game.get_player_location(opponent))
+        return float(len(closer_blank_spots(game, player)) - dist_players + moves_difference)
+
+    opponent = game.get_opponent(player)
+    num_legal_moves = len(game.get_legal_moves(player))
+    num_opp_moves = len(game.get_legal_moves(opponent))
+    moves_difference = num_legal_moves - num_opp_moves
+    if game.is_loser(player):
+            return float('-inf')
+    if game.is_winner(player):
+            return float('inf')
+
     if choice == 1:
-        return max_moves()
+        return strategy_1()
     elif choice == 2:
-        return move_difference()
+        return strategy_2()
     elif choice == 3:
-        return mix_strategy()
+        return strategy_3()
     else:
         raise ValueError(str(choice) + " not a valid option")
     '''HLI CODE'''
@@ -79,7 +190,7 @@ def custom_score(game, player):
         The heuristic value of the current game state to the specified player.
     """
     '''HLI CODE'''
-    return float(custom_heuristics(game,player,choice=2))
+    return float(custom_heuristics(game,player,choice=1))
     '''HLI CODE'''
 
 class CustomPlayer:
@@ -120,6 +231,7 @@ class CustomPlayer:
         self.method = method
         self.time_left = None
         self.TIMER_THRESHOLD = timeout
+        self.unique_moves = []
 
     def get_move(self, game, legal_moves, time_left):
         """Search for the best move from the available legal moves and return a
@@ -174,31 +286,45 @@ class CustomPlayer:
             chosen_value = float('-inf')
             chosen_move = None
             depth = 0
+            self.unique_moves = []
+            if not legal_moves:
+                return (-1,-1)
             if self.method == 'minimax':
                 if self.iterative:
                     # print(legal_moves)
+                    # Can just do this loop because for iterative deepening we just keep going down
+                    # layer by layer until we are timed out, and since we 'catch' TimeOut exception
+                    # we can properly return some value
                     while True:
-                        for move in legal_moves:
-                            value, _ = self.minimax(game.forecast_move(move), depth)
-                            if chosen_value < value:
-                                chosen_value = value
-                                chosen_move = move
+                        # try to optimize get_move in beginning - basically if i'm 2nd player and
+                        # the 1st player plays in the center. then i create a list of moves that are
+                        # the same on each 'reflection' around the center move. All i do is create
+                        # a list of top left corner locations and will use that to only search these
+                        # possible moves. (trying to get better performing player by being able
+                        # to search deeper)
+                        if len(legal_moves) == game.width*game.height-1:
+                            opp_location = game.get_player_location(game.get_opponent(self))
+                            opp_row_location = opp_location[0]
+                            if opp_location == (int(game.height/2), int(game.width/2)):
+                                self.unique_moves = []
+                                for column in range(opp_location[1]+1):
+                                    self.unique_moves += [(row, column) for row, column in zip(range(opp_row_location),[column]*opp_row_location)]
+                                self.unique_moves.remove(opp_location)
+
+                        value, chosen_move = self.minimax(game, depth)
                         depth += 1
                 else:
                     chosen_value, chosen_move = self.minimax(game, self.search_depth)
             elif self.method == 'alphabeta':
                 if self.iterative:
                     while True:
-                        for move in legal_moves:
-                            value, _ = self.alphabeta(game.forecast_move(move), depth)
-                            if chosen_value < value:
-                                chosen_move = value
-                                chosen_move = move
+                        value, chosen_move = self.alphabeta(game, depth)
                         depth += 1
                 else:
                     chosen_value, chosen_move = self.alphabeta(game, self.search_depth)
             else:
                 raise ValueError(self.method + " not a valid method")
+
             return chosen_move
             '''HLI CODE'''
         except Timeout:
@@ -207,7 +333,7 @@ class CustomPlayer:
 
 
     '''HLI CODE'''
-    def max_value(self, game, depth, player, alpha=None, beta=None):
+    def max_value(self, game, depth, player, alpha=None, beta=None, opt_moves=None):
         """
         Args:
             GAME: the game instance that is currently being evaluated
@@ -219,21 +345,29 @@ class CustomPlayer:
                 (both of these numbers are the scores that each of these player's can definitely
                     obtain and thus anything unfavorable to these numbers in their point of view
                     can be ignored)
+            OPT_MOVES: optional arg, only used by minimax or alphabeta if 2nd player and the
+                opponent's first move is in the center
         Returns:
             The value of the max value from this node -> ie the best value that MAX player can 
             obtain at this node 
         """
-        if depth == 0 or self.time_left() < self.TIMER_THRESHOLD:
+        if depth == 0:
             # note: i need to do self.score(game, self) and NOT self.score(game,player) -> when
             # i did this one it gave me wrong answer. This is because since max_value method
             # is returning the max utitliy for SELF then i need to return the score at the 
             # current game state in the point of view of SELF
-            return self.score(game, self)
+            return self.score(game, self), game.get_player_location(player)
+        if self.time_left() < self.TIMER_THRESHOLD:
+            return self.score(game, self), game.get_player_location(player)
         value = float('-inf')
+        chosen_move = (-1,-1)
+        if opt_moves:
+            moves = self.unique_moves
         # this gets the next moves for the current PLAYER - which is not necessarily SELF
         # we change this variable because legal moves of SELF vs SELF's opponent will be 
         # different
-        moves = [move for move in game.get_legal_moves(player)]
+        else:
+            moves = [move for move in game.get_legal_moves(player)]
         # then we loop through the 'active' player's move and forecast the gameboard with each
         # move and then since we denoted in the minimax method call that one of the player's
         # was MAXIMIZING then we want to return the max value (in the point of view of SELF)
@@ -241,7 +375,9 @@ class CustomPlayer:
         for move in moves:
             proposed_score = self.min_value(game.forecast_move(move), depth-1
                 , game.get_opponent(player), alpha, beta)
-            value = max(value, proposed_score)
+            if value < proposed_score:
+                value = proposed_score
+                chosen_move = move
             # if BETA (ie beta has a value because we are doing alpha-beta pruning) then we check
             # if value > beta. If it is we just return value. We do this not necessarily to return
             # value but to basically cut the for loop short (prune) the remaining nodes. we do this
@@ -253,15 +389,15 @@ class CustomPlayer:
             # value therefore all other branches can be pruned
             if beta:
                 if value >= beta:
-                    return value
+                    return value, chosen_move
                 # if it isn't greater than beta, then it's possible that VALUE is a better lower
                 # bound for MAX player and therefore update ALPHA when this happens. AND since VALUE
                 # isn't greater than BETA this is a possible result 
                 else:
                     alpha = max(alpha, value)
             if self.time_left() < self.TIMER_THRESHOLD:
-                return value
-        return value
+                return value, chosen_move
+        return value, chosen_move
 
     def min_value(self, game, depth, player, alpha=None, beta=None):
         """
@@ -279,17 +415,18 @@ class CustomPlayer:
             The value of the min value from this node. ie the best that the MIN player can obtain
             at this node
         """
-        if depth == 0 or self.time_left() < self.TIMER_THRESHOLD:
-            # print("location active", game.get_player_location(player), "location of me:", game.get_player_location(self))
+        if depth == 0:
+            return self.score(game, self)
+        if self.time_left() < self.TIMER_THRESHOLD:
             return self.score(game, self)
         value = float('inf')
         moves = [move for move in game.get_legal_moves(player)]
         # print(moves, " moves")
         for move in moves:
             # print(move, depth)
-            proposed_score = self.max_value(game.forecast_move(move), depth-1
+            proposed_score, _ = self.max_value(game.forecast_move(move), depth-1
                 , game.get_opponent(player), alpha, beta)
-            value = min(value, proposed_score)
+            value = min(proposed_score, value)
             if alpha:
                 # same logic as in MAX_VALUE but reversed. If value is less than the lower bound for
                 # MAX player (ALPHA) then this will never be an option as MAX has ALPHA as an option
@@ -341,28 +478,19 @@ class CustomPlayer:
         '''HLI CODE'''
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-        chosen_move = game.get_player_location(self)
-        active = game.active_player
-        if depth == 0:
-            # print(chosen_move)
-            return (self.score(game, self), chosen_move)
-        # print("starting location: ", game.get_player_location(self)
-        #     , game.get_player_location(game.get_opponent(self)))
-        moves = [move for move in game.get_legal_moves(active)]
-        # print(game.to_string())
+
         if maximizing_player:
-            value = float('-inf')
-            # print(game.get_player_location(active), " location")
-            # print(moves)
-            for move in moves:
-                # print(move, "minimax", depth)
-                proposed_score = self.min_value(game.forecast_move(move), depth-1
-                    , game.get_opponent(active))
-                if value <= proposed_score:
-                    value = proposed_score
-                    chosen_move = move
-                if self.time_left() < self.TIMER_THRESHOLD:
-                    break
+            if self.unique_moves:
+                value, chosen_move = self.max_value(game,depth, self, opt_moves=self.unique_moves)
+            else:
+                value, chosen_move = self.max_value(game, depth, self)
+        # else:
+        #     for move in moves:
+        #         proposed_score = self.max_value(game.forecast_move(move), depth
+        #             , game.get_opponent(active))
+        #         if proposed_score < value:
+        #             value = proposed_score
+        #             chosen_move = move
 
         return (value, chosen_move)
         '''HLI CODE'''
@@ -411,29 +539,11 @@ class CustomPlayer:
         """
         if self.time_left() < self.TIMER_THRESHOLD:
             raise Timeout()
-        active = game.active_player
-        moves = [move for move in game.get_legal_moves(active)]
-        # if not moves:
-        #     moves = [(-1,-1)]
-        # if depth == 0:
-        #     move_scores = [(self.score(game.forecast_move(move), move) for move in moves)]
-
-        #     return (max(move_scores), chosen_move)
-
         if maximizing_player:
-            value = float('-inf')
-            for move in moves:
-                proposed_score = self.min_value(game.forecast_move(move), depth-1
-                    , game.get_opponent(active), alpha, beta)
-                if proposed_score >= value:
-                    value = proposed_score
-                    chosen_move = move
-                    alpha = value
-                    # if find a win - we can stop our search because beta always set to inf, 
-                    # and eval function will set value to inf if find a forced win therefore if 
-                    # eval function returns inf then we know we have a win
-                    if alpha >= beta:
-                        break
-                if self.time_left() < self.TIMER_THRESHOLD:
-                    break
+            if self.unique_moves:
+                value, chosen_move = self.max_value(game,depth, self, alpha=alpha, beta=beta
+                    , opt_moves=self.unique_moves)
+            else:
+                value, chosen_move = self.max_value(game, depth, self, alpha, beta)
+
         return (value, chosen_move)

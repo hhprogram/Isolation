@@ -74,14 +74,16 @@ def play_match(player1, player2):
         move = random.choice(games[0].get_legal_moves())
         games[0].apply_move(move)
         games[1].apply_move(move)
-
+    # print("hello6")
     # play both games and tally the results
     for game in games:
+        # print("starting:")
         winner, _, termination = game.play(time_limit=TIME_LIMIT)
+        # print("one game done")
 
         if player1 == winner:
             num_wins[player1] += 1
-
+            # print("win!")
             if termination == "timeout":
                 num_timeouts[player2] += 1
             else:
@@ -92,13 +94,14 @@ def play_match(player1, player2):
             num_wins[player2] += 1
 
             if termination == "timeout":
+                print("lostt due to timeout")
                 num_timeouts[player1] += 1
             else:
+                # print("lostt due to invalid move")
                 num_invalid_moves[player1] += 1
 
     if sum(num_timeouts.values()) != 0:
         warnings.warn(TIMEOUT_WARNING)
-
     return num_wins[player1], num_wins[player2]
 
 
@@ -117,16 +120,19 @@ def play_round(agents, num_matches):
 
         counts = {agent_1.player: 0., agent_2.player: 0.}
         names = [agent_1.name, agent_2.name]
+        # print("hello")
         print("  Match {}: {!s:^11} vs {!s:^11}".format(idx + 1, *names), end=' ')
-
+        # print("hello2")
         # Each player takes a turn going first
         for p1, p2 in itertools.permutations((agent_1.player, agent_2.player)):
+            # print("playing ", num_matches, " matches")
             for _ in range(num_matches):
+                # print("hello4")
                 score_1, score_2 = play_match(p1, p2)
                 counts[p1] += score_1
                 counts[p2] += score_2
                 total += score_1 + score_2
-
+                # print("Done with match:", _)
         wins += counts[agent_1.player]
 
         print("\tResult: {} to {}".format(int(counts[agent_1.player]),

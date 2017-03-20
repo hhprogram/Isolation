@@ -322,14 +322,16 @@ class Board(object):
         curr_time_millis = lambda: 1000 * timeit.default_timer()
 
         while True:
-
+            # print(self.to_string())
             legal_player_moves = self.get_legal_moves()
 
             game_copy = self.copy()
 
             move_start = curr_time_millis()
             time_left = lambda : time_limit - (curr_time_millis() - move_start)
+            # print("right before: ", self.__player_symbols__[self.active_player])
             curr_move = self.active_player.get_move(game_copy, legal_player_moves, time_left)
+            # print("got move")
             move_end = time_left()
 
             # print move_end
@@ -343,6 +345,7 @@ class Board(object):
                 move_history[-1].append(curr_move)
 
             if move_end < 0:
+                print("Timeout loss")
                 return self.__inactive_player__, move_history, "timeout"
 
             if curr_move not in legal_player_moves:
