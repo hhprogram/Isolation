@@ -24,7 +24,6 @@ def calc_dist(game, player, spot):
                 sq distance)
         """
         location = game.get_player_location(player)
-        # print(location, spot)
         sq_dist = (location[0] - spot[0])**2 + (location[1] - spot[1])**2
         return float(sq_dist)
 
@@ -49,11 +48,20 @@ def closer_blank_spots(game, player):
             closer_spots.append(blank)
     return closer_spots
 
-def is_partitioned(game):
+def forecast_legal_moves(game, player, opponent):
     """
-    helper method to determine if the players have been partitioned
+    method trying to forecast potential total number of legal moves from any possible legal moves
+    from this current game state (try to estimate potential moving space in 4 plies from now)
     """
-
+    legal_moves = game.get_legal_moves(player)
+    opp_moves = game.get_legal_moves(opponent)
+    num_moves = 0
+    for move in legal_moves:
+        # don't consider moves that could be blocked by opponent occupying them on their ply
+        if move in opp_moves:
+            pass
+        num_moves += len(game.forecast_move(move).get_legal_moves(player))
+    return num_moves
 
 
 def custom_heuristics(game, player, choice):
@@ -131,10 +139,14 @@ def custom_heuristics(game, player, choice):
             (1) number of blank spaces on PLAYER's side of the board (ie the part of the board that 
                 PLAYER is 'closer' to than his opponent - cells equadistant considered part of 
                 'wall' and not incl. in sum) plus
-            (2) distance between the two players - try to minimize that
+            (2) distance between the two players - try to minimize that (deprecated that and it
+                seemed to have do better)
             (3) if start of game, try to be as centered as possible
             (4) difference between the legal moves I have from this game instance and the legal
                 moves my opponent has at this very instant
+            (5) 'future_moves' - ie number of legal_moves on the 4th ply from this turn, excludes
+                any moves from spots that opponent could occupy on this next ply before i get 
+                another turn
         """
         # checking if i am first mover - if so try to get center spot or the most centered spot if
         # height and width not odd
@@ -144,8 +156,13 @@ def custom_heuristics(game, player, choice):
                 return float('inf')
             else:
                 return float(1/calc_dist(game, player, center_spot))
-        dist_players = calc_dist(game, player, game.get_player_location(opponent))
-        return float(len(closer_blank_spots(game, player)) - dist_players + moves_difference)
+        # dist_players = calc_dist(game, player, game.get_player_location(opponent))
+        future_moves = forecast_legal_moves(game, player, opponent)
+        block_move = 0
+        if game.get_player_location(player) in game.get_legal_moves(opponent):
+            block_move = 1
+        return float(len(closer_blank_spots(game, player)) + moves_difference
+             + future_moves + block_move)
 
     opponent = game.get_opponent(player)
     num_legal_moves = len(game.get_legal_moves(player))
@@ -190,7 +207,7 @@ def custom_score(game, player):
         The heuristic value of the current game state to the specified player.
     """
     '''HLI CODE'''
-    return float(custom_heuristics(game,player,choice=1))
+    return float(custom_heuristics(game,player,choice=3))
     '''HLI CODE'''
 
 class CustomPlayer:
@@ -289,39 +306,40 @@ class CustomPlayer:
             self.unique_moves = []
             if not legal_moves:
                 return (-1,-1)
+            # try to optimize get_move in beginning - basically if i'm 2nd player and
+            # the 1st player plays in the center. then i create a list of moves that are
+            # the same on each 'reflection' around the center move. All i do is create
+            # a list of top left corner locations and will use that to only search these
+            # possible moves. (trying to get better performing player by being able
+            # to search deeper)
+            if len(legal_moves) == game.width*game.height-1:
+                opp_location = game.get_player_location(game.get_opponent(self))
+                opp_row_location = opp_location[0]
+                if opp_location == (int(game.height/2), int(game.width/2)):
+                    self.unique_moves = []
+                    for column in range(opp_location[1]+1):
+                        self.unique_moves += [(row, column) for row, column in zip(range(opp_row_location),[column]*opp_row_location)]
+                    self.unique_moves.remove(opp_location)
+
             if self.method == 'minimax':
+                # print(self.method)
                 if self.iterative:
-                    # print(legal_moves)
                     # Can just do this loop because for iterative deepening we just keep going down
                     # layer by layer until we are timed out, and since we 'catch' TimeOut exception
                     # we can properly return some value
                     while True:
-                        # try to optimize get_move in beginning - basically if i'm 2nd player and
-                        # the 1st player plays in the center. then i create a list of moves that are
-                        # the same on each 'reflection' around the center move. All i do is create
-                        # a list of top left corner locations and will use that to only search these
-                        # possible moves. (trying to get better performing player by being able
-                        # to search deeper)
-                        if len(legal_moves) == game.width*game.height-1:
-                            opp_location = game.get_player_location(game.get_opponent(self))
-                            opp_row_location = opp_location[0]
-                            if opp_location == (int(game.height/2), int(game.width/2)):
-                                self.unique_moves = []
-                                for column in range(opp_location[1]+1):
-                                    self.unique_moves += [(row, column) for row, column in zip(range(opp_row_location),[column]*opp_row_location)]
-                                self.unique_moves.remove(opp_location)
-
                         value, chosen_move = self.minimax(game, depth)
                         depth += 1
                 else:
-                    chosen_value, chosen_move = self.minimax(game, self.search_depth)
+                    value, chosen_move = self.minimax(game, self.search_depth)
             elif self.method == 'alphabeta':
+                # print(self.method)
                 if self.iterative:
                     while True:
                         value, chosen_move = self.alphabeta(game, depth)
                         depth += 1
                 else:
-                    chosen_value, chosen_move = self.alphabeta(game, self.search_depth)
+                    value, chosen_move = self.alphabeta(game, self.search_depth)
             else:
                 raise ValueError(self.method + " not a valid method")
 
@@ -358,7 +376,8 @@ class CustomPlayer:
             # current game state in the point of view of SELF
             return self.score(game, self), game.get_player_location(player)
         if self.time_left() < self.TIMER_THRESHOLD:
-            return self.score(game, self), game.get_player_location(player)
+            # return self.score(game, self), game.get_player_location(player)
+            raise Timeout()
         value = float('-inf')
         chosen_move = (-1,-1)
         if opt_moves:
@@ -367,13 +386,13 @@ class CustomPlayer:
         # we change this variable because legal moves of SELF vs SELF's opponent will be 
         # different
         else:
-            moves = [move for move in game.get_legal_moves(player)]
+            moves = game.get_legal_moves(player)
         # then we loop through the 'active' player's move and forecast the gameboard with each
         # move and then since we denoted in the minimax method call that one of the player's
         # was MAXIMIZING then we want to return the max value (in the point of view of SELF)
         # from the minimum values that the other player will choose
         for move in moves:
-            proposed_score = self.min_value(game.forecast_move(move), depth-1
+            proposed_score, _ = self.min_value(game.forecast_move(move), depth-1
                 , game.get_opponent(player), alpha, beta)
             if value < proposed_score:
                 value = proposed_score
@@ -416,29 +435,32 @@ class CustomPlayer:
             at this node
         """
         if depth == 0:
-            return self.score(game, self)
+            return self.score(game, self), game.get_player_location(player)
         if self.time_left() < self.TIMER_THRESHOLD:
-            return self.score(game, self)
+            raise Timeout()
+            # return self.score(game, self), game.get_player_location(player)
         value = float('inf')
-        moves = [move for move in game.get_legal_moves(player)]
-        # print(moves, " moves")
+        moves = game.get_legal_moves(player)
+        chosen_move = (-1,-1)
         for move in moves:
-            # print(move, depth)
             proposed_score, _ = self.max_value(game.forecast_move(move), depth-1
                 , game.get_opponent(player), alpha, beta)
-            value = min(proposed_score, value)
+            if proposed_score < value:
+                value = proposed_score
+                chosen_move = move
             if alpha:
                 # same logic as in MAX_VALUE but reversed. If value is less than the lower bound for
                 # MAX player (ALPHA) then this will never be an option as MAX has ALPHA as an option
                 # which is strictly better than value but MIN player will definitely choose VALUE
                 # over anything > ALPHA therefore can cut the for loop short
                 if value <= alpha:
-                    return value
+                    return value, chosen_move
                 else:
                     beta = min(beta, value)
             if self.time_left() < self.TIMER_THRESHOLD:
-                return value
-        return value
+                raise Timeout()
+                # return value, chosen_move
+        return value, chosen_move
     '''HLI CODE'''
 
     def minimax(self, game, depth, maximizing_player=True):
@@ -484,13 +506,11 @@ class CustomPlayer:
                 value, chosen_move = self.max_value(game,depth, self, opt_moves=self.unique_moves)
             else:
                 value, chosen_move = self.max_value(game, depth, self)
-        # else:
-        #     for move in moves:
-        #         proposed_score = self.max_value(game.forecast_move(move), depth
-        #             , game.get_opponent(active))
-        #         if proposed_score < value:
-        #             value = proposed_score
-        #             chosen_move = move
+        else:
+            if self.unique_moves:
+                value, chosen_move = self.min_value(game, depth, self, opt_moves=self.unique_moves)
+            else:
+                value, chosen_move = self.min_value(game, depth, self)
 
         return (value, chosen_move)
         '''HLI CODE'''
@@ -545,5 +565,11 @@ class CustomPlayer:
                     , opt_moves=self.unique_moves)
             else:
                 value, chosen_move = self.max_value(game, depth, self, alpha, beta)
+        else:
+            if self.unique_moves:
+                value, chosen_move = self.min_value(game,depth, self, alpha=alpha, beta=beta
+                    , opt_moves=self.unique_moves)
+            else:
+                value, chosen_move = self.min_value(game, depth, self, alpha, beta)
 
         return (value, chosen_move)
